@@ -79,6 +79,9 @@ for dir in ${dirs}; do
   #if [[ -v TEST_MODE ]]; then
   #  IMAGE_NAME+="-candidate"
   #fi
+   if [[ TEST_MODE ]]; then
+    IMAGE_NAME+="-candidate"
+  fi
 
   echo "-> Building ${IMAGE_NAME} ..."
 
@@ -87,6 +90,14 @@ for dir in ${dirs}; do
     docker_build_with_version Dockerfile.rhel7
   else
     docker_build_with_version Dockerfile
+  fi
+  if [[ TEST_MODE ]]; then
+    IMAGE_NAME=${IMAGE_NAME} test/run
+
+    if [[ $? -eq 0 ]] && [[ "${TAG_ON_SUCCESS}" == "true" ]]; then
+      echo "-> Re-tagging ${IMAGE_NAME} image to ${IMAGE_NAME%"-candidate"}"
+      docker tag $IMAGE_NAME ${IMAGE_NAME%"-candidate"}
+    fi
   fi
 
   #if [[ -v TEST_MODE ]]; then

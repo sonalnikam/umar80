@@ -9,10 +9,11 @@ else
 endif
 
 script_env = \
-	SKIP_SQUASH=1                      \
+	SKIP_SQUASH=$(SKIP_SQUASH)                      \
+	UPDATE_BASE=$(UPDATE_BASE)                      \
 	VERSIONS="$(VERSIONS)"                          \
 	OS=$(OS)                                        \
-	VERSION=$(VERSION)                              \
+	VERSION="$(VERSION)"                            \
 	BASE_IMAGE_NAME=$(BASE_IMAGE_NAME)              \
 	OPENSHIFT_NAMESPACES="$(OPENSHIFT_NAMESPACES)"
 
@@ -20,6 +21,8 @@ script_env = \
 build:
 	$(script_env) $(build)
 
-#.PHONY: test
-#test:
+.PHONY: test
+test:
+test:
+	$(script_env) TAG_ON_SUCCESS=$(TAG_ON_SUCCESS) TEST_MODE=true $(build)
 #	$(script_env) TAG_ON_SUCCESS=$(TAG_ON_SUCCESS) TEST_MODE=true $(build)

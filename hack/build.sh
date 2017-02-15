@@ -23,8 +23,6 @@ test -z "$BASE_IMAGE_NAME" && {
   BASE_IMAGE_NAME="${BASE_DIR_NAME#s2i-}"
 }
 
-NAMESPACE="codecasts/"
-
 # Cleanup the temporary Dockerfile created by docker build with version
 trap "rm -f ${DOCKERFILE_PATH}.version" SIGINT SIGQUIT EXIT
 
@@ -36,7 +34,10 @@ function docker_build_with_version {
   cp ${DOCKERFILE_PATH} "${DOCKERFILE_PATH}.version"
   git_version=$(git rev-parse HEAD)
   echo "LABEL io.openshift.builder-version=\"${git_version}\"" >> "${dockerfile}.version"
-  docker build -t ${IMAGE_NAME} -f "${dockerfile}.version" .
+  if [[ "${UPDATE_BASE}" == "1" ]]; then
+    BUILD_OPTIONS+=" --pull=true"
+  fi
+  docker build ${BUILD_OPTIONS} -t ${IMAGE_NAME} -f "${dockerfile}.version" .
   if [[ "${SKIP_SQUASH}" != "1" ]]; then
     squash "${dockerfile}.version"
   fi
@@ -44,14 +45,21 @@ function docker_build_with_version {
 }
 
 # Install the docker squashing tool[1] and squash the result image
-# [1] https://github.com/goldmann/docker-scripts
+# [1] https://github.com/goldmann/docker-squash
 function squash {
   # FIXME: We have to use the exact versions here to avoid Docker client
   #        compatibility issues
+  
+  
+   #########easy_install -q --user docker_py==1.7.2 docker-squash==1.0.4
    pip -q --user docker_py==2.0.2  docker-squash==1.0.5
-  #easy_install -q --user docker_py==1.6.0 docker-scripts==0.4.4
+   
+ #  easy_install -q --user https://github.com/SonamVerma9/s2i-php-container.git docker_py==2.0.2 docker-squash==1.0.5
+   
+   
+   
   base=$(awk '/^FROM/{print $2}' $1)
-  ${HOME}/.local/bin/docker-scripts squash -f $base ${IMAGE_NAME}
+  ${HOME}/.local/bin/docker-squash -f $base ${IMAGE_NAME}
 }
 
 # Versions are stored in subdirectories. You can specify VERSION variable
@@ -60,7 +68,9 @@ dirs=${VERSION:-$VERSIONS}
 
 for dir in ${dirs}; do
   case " $OPENSHIFT_NAMESPACES " in
-    *\ ${dir}\ *) ;;
+    *\ ${dir}\ *)
+      NAMESPACE="openshift/"
+      ;;
     *)
       if [ "${OS}" == "centos7" ]; then
         NAMESPACE="centos/"
@@ -76,10 +86,29 @@ for dir in ${dirs}; do
 
   IMAGE_NAME="${NAMESPACE}${BASE_IMAGE_NAME}-${dir//./}-${OS}"
 
-  #if [[ -v TEST_MODE ]]; then
+ # if [[ -v TEST_MODE ]]; then
   #  IMAGE_NAME+="-candidate"
-  #fi
-   if [[ TEST_MODE ]]; then
+ # fi
+
+ # echo "-> Building ${IMAGE_NAME} ..."
+
+  #pushd ${dir} > /dev/null
+#  if [ "$OS" == "rhel7" -o "$OS" == "rhel7-candidate" ]; then
+#    docker_build_with_version Dockerfile.rhel7
+ # else
+ #   docker_build_with_version Dockerfile
+#  fi
+
+  #if [[ -v TEST_MODE ]]; then
+  #  IMAGE_NAME=${IMAGE_NAME} test/run
+
+ #  if [[ $? -eq 0 ]] && [[ "${TAG_ON_SUCCESS}" == "true" ]]; then
+   #   echo "-> Re-tagging ${IMAGE_NAME} image to ${IMAGE_NAME%"-candidate"}"
+  #    docker tag $IMAGE_NAME ${IMAGE_NAME%"-candidate"}
+ #   fi
+ # fi
+
+  if [[ TEST_MODE ]]; then
     IMAGE_NAME+="-candidate"
   fi
 
@@ -91,6 +120,7 @@ for dir in ${dirs}; do
   else
     docker_build_with_version Dockerfile
   fi
+
   if [[ TEST_MODE ]]; then
     IMAGE_NAME=${IMAGE_NAME} test/run
 
@@ -99,15 +129,5 @@ for dir in ${dirs}; do
       docker tag $IMAGE_NAME ${IMAGE_NAME%"-candidate"}
     fi
   fi
-
-  #if [[ -v TEST_MODE ]]; then
-  #  IMAGE_NAME=${IMAGE_NAME} test/run
-
-  #  if [[ $? -eq 0 ]] && [[ "${TAG_ON_SUCCESS}" == "true" ]]; then
-  #    echo "-> Re-tagging ${IMAGE_NAME} image to ${IMAGE_NAME%"-candidate"}"
-  #    docker tag -f $IMAGE_NAME ${IMAGE_NAME%"-candidate"}
-  #  fi
-  #fi
-
   popd > /dev/null
 done
